@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Snakes &amp; Ladders</title>
 <style>
-  :root { --accent: #4ade80; --turn: #f87171; }
+  :root { --accent: #4ade80; --turn: #f87171; --step: 160ms; --slide: 600ms; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     min-height: 100vh;
@@ -20,6 +20,7 @@
     user-select: none;
   }
   h1 { font-size: 1.8rem; letter-spacing: 0.2em; margin-bottom: 0.75rem; color: var(--accent); text-align: center; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .game { display: flex; gap: 1.25rem; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
   .board-wrap { position: relative; width: min(92vw, 560px); }
   #board {
@@ -31,14 +32,15 @@
     border-radius: 8px;
     box-shadow: 0 10px 40px rgba(0,0,0,0.5);
   }
-  .token { transition: transform 0.16s ease-out, opacity 0.2s; }
-  .token.slide { transition: transform 0.6s ease-in-out, opacity 0.2s; }
+  #confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .token { transition: transform var(--step) ease-out, opacity 0.2s; }
+  .token.slide { transition: transform var(--slide) ease-in-out, opacity 0.2s; }
   .token circle { stroke: #0f172a; stroke-width: 2; }
   .token.active circle { stroke: #fff; stroke-width: 3; }
   .token text { font-size: 11px; font-weight: 700; fill: #0f172a; text-anchor: middle; dominant-baseline: central; }
 
   .panel {
-    width: min(92vw, 270px);
+    width: min(92vw, 280px);
     background: #1e293b;
     border: 1px solid #334155;
     border-radius: 8px;
@@ -46,10 +48,11 @@
     display: flex; flex-direction: column; gap: 0.9rem;
   }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-  select, .btn-small {
+  .toolbar select { flex: 1; min-width: 0; }
+  select, .btn-small, .seat input {
     background: #0f172a; color: #e2e8f0;
     border: 1px solid #475569; border-radius: 4px;
-    padding: 0.3rem 0.5rem; font-size: 0.9rem;
+    padding: 0.3rem 0.5rem; font-size: 0.9rem; font-family: inherit;
   }
   .btn-small { cursor: pointer; }
   .btn-small:hover { border-color: var(--accent); }
@@ -62,7 +65,8 @@
   }
   li.active { border-color: var(--turn); background: #0f172a; }
   .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
-  .pname { flex: 1; }
+  .pname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag { font-size: 0.65rem; color: #94a3b8; border: 1px solid #475569; border-radius: 3px; padding: 0 0.25rem; vertical-align: middle; }
   .ppos { color: #94a3b8; font-size: 0.85rem; }
   .dice-row { display: flex; align-items: center; gap: 1rem; }
   .dice {
@@ -89,58 +93,115 @@
   #rollBtn:disabled { opacity: 0.55; cursor: default; }
   .log { min-height: 7.5em; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; color: #94a3b8; }
   .log div:first-child { color: #e2e8f0; }
+
+  details { border-top: 1px solid #334155; padding-top: 0.75rem; }
+  summary { cursor: pointer; font-size: 0.9rem; font-weight: 600; color: #cbd5e1; }
+  .setup-body { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.65rem; font-size: 0.85rem; }
+  .seat { display: flex; align-items: center; gap: 0.4rem; }
+  .seat[hidden] { display: none; }
+  .seat input { flex: 1; min-width: 0; }
+  .check { display: flex; align-items: flex-start; gap: 0.45rem; color: #cbd5e1; cursor: pointer; }
+  .check input { margin-top: 0.15rem; accent-color: var(--accent); }
+  .hint { color: #64748b; font-size: 0.78rem; }
+  #applyBtn {
+    padding: 0.5rem; font-size: 0.9rem; font-weight: 600;
+    background: var(--accent); color: #0f172a;
+    border: none; border-radius: 6px; cursor: pointer;
+  }
+  .record { font-size: 0.8rem; line-height: 1.5; color: #94a3b8; }
+  .link-btn {
+    background: none; border: none; padding: 0;
+    color: #64748b; font-size: 0.78rem; text-decoration: underline; cursor: pointer;
+  }
   .rules { font-size: 0.8rem; line-height: 1.4; color: #64748b; }
 
   .overlay {
     position: absolute; inset: 0;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(15, 23, 42, 0.88);
     border-radius: 8px;
-    text-align: center; gap: 0.75rem;
+    text-align: center; gap: 0.75rem; padding: 1rem;
   }
   .overlay.hidden { display: none; }
   .overlay h2 { font-size: 2rem; color: var(--turn); }
   .overlay p { color: #94a3b8; }
   .overlay button {
-    margin-top: 0.5rem; padding: 0.6rem 1.8rem;
+    margin-top: 0.25rem; padding: 0.6rem 1.8rem;
     font-size: 1rem; font-weight: 600;
     background: var(--accent); color: #0f172a;
     border: none; border-radius: 6px; cursor: pointer;
   }
+  .stats { border-collapse: collapse; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+  .stats th, .stats td { padding: 0.25rem 0.55rem; text-align: right; }
+  .stats th:first-child, .stats td:first-child { text-align: left; }
+  .stats th { color: #94a3b8; font-weight: 600; border-bottom: 1px solid #334155; }
+  .stats .dot { display: inline-block; width: 10px; height: 10px; vertical-align: middle; margin-right: 0.3rem; }
   .credit { margin-top: 1rem; color: #64748b; font-size: 0.85rem; }
   .credit a { color: var(--accent); text-decoration: none; font-weight: 600; }
   .credit a:hover { text-decoration: underline; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .token, .token.slide { transition: none; }
+    .dice.rolling { animation: none; }
+  }
 </style>
 </head>
 <body>
   <h1>SNAKES &amp; LADDERS</h1>
   <div class="game">
     <div class="board-wrap">
-      <svg id="board" viewBox="0 0 500 500" aria-label="Snakes and Ladders board"></svg>
+      <svg id="board" viewBox="0 0 500 500" role="img" aria-label="Snakes and Ladders board">
+        <defs>
+          <filter id="glow" filterUnits="userSpaceOnUse" x="0" y="0" width="500" height="500">
+            <feGaussianBlur stdDeviation="3.5" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+      </svg>
       <div class="overlay hidden" id="overlay">
         <h2 id="winTitle"></h2>
         <p id="winText"></p>
+        <table class="stats" id="statsTable"></table>
         <button id="againBtn">Play Again</button>
       </div>
+      <canvas id="confetti" aria-hidden="true"></canvas>
     </div>
     <div class="panel">
-      <div class="row">
-        <select id="mode" aria-label="Players">
-          <option value="cpu">You vs Computer</option>
-          <option value="2">2 Players</option>
-          <option value="3">3 Players</option>
-          <option value="4">4 Players</option>
+      <div class="row toolbar">
+        <button class="btn-small" id="muteBtn" aria-label="Mute sound"></button>
+        <select id="speed" aria-label="Animation speed">
+          <option value="normal">Normal</option>
+          <option value="fast">Fast</option>
         </select>
         <button class="btn-small" id="newBtn">New Game</button>
       </div>
-      <ul id="players"></ul>
+      <ul id="players" aria-label="Players"></ul>
       <div class="dice-row">
-        <div class="dice" id="dice"></div>
+        <div class="dice" id="dice" role="img" aria-label="Die showing 1"></div>
         <button id="rollBtn">Roll</button>
       </div>
-      <div class="log" id="log"></div>
-      <p class="rules">Roll to move. Ladders take you up, snakes slide you down. A 6 earns another roll. You must land exactly on 100 to win. Space or Enter rolls.</p>
+      <div class="log" id="log" role="log" aria-live="polite"></div>
+      <details id="setup">
+        <summary>Game setup</summary>
+        <div class="setup-body">
+          <label class="row">Players
+            <select id="count">
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </label>
+          <div id="seats" class="setup-body"></div>
+          <label class="check"><input type="checkbox" id="optBounce"> Bounce back if you overshoot 100</label>
+          <label class="check"><input type="checkbox" id="optSixes"> A third 6 in a row ends your turn</label>
+          <label class="check"><input type="checkbox" id="optRandom"> New random board each game</label>
+          <p class="hint">Changes apply when you start a new game.</p>
+          <button id="applyBtn">Start new game</button>
+        </div>
+      </details>
+      <div class="record" id="record"></div>
+      <p class="rules" id="rules"></p>
     </div>
   </div>
   <div class="credit">Created by <a href="https://github.com/niteshsrivastava484" target="_blank" rel="noopener">Nitesh Srivastava</a></div>
@@ -151,28 +212,44 @@
   // Classic layout: key = square you land on, value = square you end up on
   const SNAKES = { 16: 6, 47: 26, 49: 11, 56: 53, 62: 19, 64: 60, 87: 24, 93: 73, 95: 75, 98: 78 };
   const LADDERS = { 1: 38, 4: 14, 9: 31, 21: 42, 28: 84, 36: 44, 51: 67, 71: 91, 80: 100 };
+  const CLASSIC = { ...SNAKES, ...LADDERS };
   const PLAYER_COLORS = ["#f87171", "#60a5fa", "#4ade80", "#facc15"];
   const SNAKE_COLORS = ["#22c55e", "#a855f7", "#ef4444", "#14b8a6", "#f97316", "#ec4899", "#84cc16", "#06b6d4", "#eab308", "#8b5cf6"];
   // Each player's spot inside a cell, so tokens sharing a square stay visible
   const OFFSETS = [[-11, -9], [11, -9], [-11, 11], [11, 11]];
   // Lit pips (3x3 grid, row-major) for each die face
   const FACES = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+  // Delays in ms. The CSS token transitions are set from step/slide in applySpeed().
+  const SPEEDS = {
+    normal: { frames: 8, frame: 55, step: 170, pause: 200, slide: 650, cpu: 900 },
+    fast:   { frames: 4, frame: 40, step: 80,  pause: 90,  slide: 320, cpu: 350 },
+  };
+  const DEFAULT_SEATS = [
+    { name: "You", cpu: false },
+    { name: "Computer", cpu: true },
+    { name: "", cpu: false },
+    { name: "", cpu: false },
+  ];
+  const SAVE_KEY = "slGame", SETUP_KEY = "slSetup", RECORD_KEY = "slRecord";
   const SVGNS = "http://www.w3.org/2000/svg";
+  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
-  const board = document.getElementById("board");
-  const modeEl = document.getElementById("mode");
-  const listEl = document.getElementById("players");
-  const diceEl = document.getElementById("dice");
-  const rollBtn = document.getElementById("rollBtn");
-  const logEl = document.getElementById("log");
-  const overlay = document.getElementById("overlay");
-  const winTitle = document.getElementById("winTitle");
-  const winText = document.getElementById("winText");
+  const $ = id => document.getElementById(id);
+  const board = $("board"), listEl = $("players"), diceEl = $("dice"), rollBtn = $("rollBtn");
+  const logEl = $("log"), overlay = $("overlay"), winTitle = $("winTitle"), winText = $("winText");
+  const statsTable = $("statsTable"), recordEl = $("record"), rulesEl = $("rules");
+  const speedEl = $("speed"), muteBtn = $("muteBtn"), countEl = $("count"), seatsEl = $("seats");
+  const confettiCanvas = $("confetti");
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const readJSON = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
+  const writeJSON = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
+  const defaultName = (i, cpu) => cpu ? `Computer ${i + 1}` : `Player ${i + 1}`;
+  const speed = () => SPEEDS[speedEl.value] || SPEEDS.normal;
+  const rollsText = n => `${n} roll${n === 1 ? "" : "s"}`;
 
-  let players, tokens, turn, busy, over, cpuTimer;
-  let gameId = 0; // bumped on every new game so an in-flight turn from the old game stops
+  let game, tokens = [], featureEls = {}, busy = false, cpuTimer, confettiRun = 0;
+  let gameId = 0; // bumped on every new or restored game so an in-flight turn from the old one stops
 
   function svg(tag, attrs, parent) {
     const e = document.createElementNS(SVGNS, tag);
@@ -181,6 +258,65 @@
     return e;
   }
 
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = String(text);
+    return e;
+  }
+
+  // ---------- Sound (generated with Web Audio, so there are no sound files) ----------
+
+  let muted = localStorage.getItem("slMuted") === "1";
+  let actx = null;
+
+  function audio() {
+    if (muted) return null;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!actx) actx = new AC();
+    if (actx.state === "suspended") actx.resume().catch(() => {});
+    return actx;
+  }
+
+  function tone(freq, start, dur, { type = "sine", gain = 0.12, to = 0 } = {}) {
+    const ctx = audio();
+    if (!ctx || ctx.state !== "running") return;
+    const t0 = ctx.currentTime + start;
+    const osc = ctx.createOscillator(), amp = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (to) osc.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+    amp.gain.setValueAtTime(0.0001, t0);
+    amp.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
+    amp.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(amp).connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+
+  const sfx = {
+    dice: () => tone(160 + Math.random() * 140, 0, 0.035, { type: "square", gain: 0.04 }),
+    step: () => tone(620 + Math.random() * 60, 0, 0.05, { type: "triangle", gain: 0.05 }),
+    ladder: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.08, 0.15, { type: "triangle" })),
+    snake: () => tone(700, 0, 0.6, { type: "sawtooth", gain: 0.05, to: 110 }),
+    blocked: () => tone(220, 0, 0.2, { type: "square", gain: 0.04, to: 150 }),
+    win: () => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, i * 0.12, 0.24, { type: "triangle", gain: 0.14 })),
+  };
+
+  // Browsers only allow audio after the user interacts with the page
+  const unlockAudio = () => audio();
+  document.addEventListener("pointerdown", unlockAudio, { once: true });
+  document.addEventListener("keydown", unlockAudio, { once: true });
+
+  function renderMute() {
+    muteBtn.textContent = muted ? "🔇" : "🔊";
+    muteBtn.title = muted ? "Sound is off" : "Sound is on";
+    muteBtn.setAttribute("aria-pressed", String(muted));
+  }
+
+  // ---------- Board ----------
+
   // Centre of square n (1-100). Square 1 is bottom-left and rows alternate direction.
   function center(n) {
     const i = n - 1, row = Math.floor(i / N);
@@ -188,35 +324,51 @@
     return { x: col * CELL + CELL / 2, y: (N - 1 - row) * CELL + CELL / 2 };
   }
 
-  function drawBoard() {
-    for (let n = 1; n <= 100; n++) {
-      const { x, y } = center(n);
-      const left = x - CELL / 2, top = y - CELL / 2;
-      const shade = (left / CELL + top / CELL) % 2 === 0;
-      svg("rect", { x: left, y: top, width: CELL, height: CELL,
-                    fill: n === 100 ? "#14532d" : shade ? "#1e293b" : "#22304a" }, board);
-      svg("text", { x: left + 4, y: top + 13, "font-size": 11, "font-weight": 600, fill: "#64748b" }, board).textContent = n;
-    }
-    for (const [from, to] of Object.entries(LADDERS)) drawLadder(+from, to);
-    Object.entries(SNAKES).forEach(([head, tail], k) => drawSnake(+head, tail, SNAKE_COLORS[k % SNAKE_COLORS.length]));
+  const cellLayer = svg("g", {}, board);
+  const hiLayer = svg("g", {}, board);
+  const featureLayer = svg("g", {}, board);
+  const tokenLayer = svg("g", {}, board); // drawn last so tokens sit above snakes and ladders
+  const hiJump = svg("rect", { width: CELL, height: CELL, rx: 3, opacity: 0 }, hiLayer);
+  const hiLand = svg("rect", { width: CELL, height: CELL, rx: 3, opacity: 0 }, hiLayer);
+
+  for (let n = 1; n <= 100; n++) {
+    const { x, y } = center(n);
+    const left = x - CELL / 2, top = y - CELL / 2;
+    const shade = (left / CELL + top / CELL) % 2 === 0;
+    svg("rect", { x: left, y: top, width: CELL, height: CELL,
+                  fill: n === 100 ? "#14532d" : shade ? "#1e293b" : "#22304a" }, cellLayer);
+    svg("text", { x: left + 4, y: top + 13, "font-size": 11, "font-weight": 600, fill: "#64748b" }, cellLayer).textContent = n;
+  }
+
+  function drawFeatures(jumps) {
+    featureLayer.replaceChildren();
+    featureEls = {};
+    const entries = Object.entries(jumps).map(([from, to]) => [+from, to]);
+    // Ladders first so snakes are drawn over them
+    for (const [from, to] of entries) if (to > from) featureEls[from] = drawLadder(from, to);
+    let k = 0;
+    for (const [from, to] of entries) if (to < from) featureEls[from] = drawSnake(from, to, SNAKE_COLORS[k++ % SNAKE_COLORS.length]);
   }
 
   function drawLadder(from, to) {
+    const g = svg("g", {}, featureLayer);
     const a = center(from), b = center(to);
     const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
     const px = -dy / len * 9, py = dx / len * 9; // half the ladder's width, perpendicular to it
     const rail = { stroke: "#d97706", "stroke-width": 4, "stroke-linecap": "round" };
-    svg("line", { x1: a.x + px, y1: a.y + py, x2: b.x + px, y2: b.y + py, ...rail }, board);
-    svg("line", { x1: a.x - px, y1: a.y - py, x2: b.x - px, y2: b.y - py, ...rail }, board);
+    svg("line", { x1: a.x + px, y1: a.y + py, x2: b.x + px, y2: b.y + py, ...rail }, g);
+    svg("line", { x1: a.x - px, y1: a.y - py, x2: b.x - px, y2: b.y - py, ...rail }, g);
     const rungs = Math.max(2, Math.round(len / 22));
     for (let r = 1; r < rungs; r++) {
       const cx = a.x + dx * r / rungs, cy = a.y + dy * r / rungs;
       svg("line", { x1: cx + px, y1: cy + py, x2: cx - px, y2: cy - py,
-                    stroke: "#fbbf24", "stroke-width": 3, "stroke-linecap": "round" }, board);
+                    stroke: "#fbbf24", "stroke-width": 3, "stroke-linecap": "round" }, g);
     }
+    return g;
   }
 
   function drawSnake(head, tail, color) {
+    const g = svg("g", {}, featureLayer);
     const a = center(head), b = center(tail);
     const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
     const nx = -dy / len, ny = dx / len;
@@ -231,52 +383,101 @@
     }
     const d = "M" + pts.join(" L");
     const body = { d, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" };
-    svg("path", { ...body, stroke: "#0f172a", "stroke-width": 11, opacity: 0.6 }, board);
-    svg("path", { ...body, stroke: color, "stroke-width": 8 }, board);
-    svg("path", { ...body, stroke: "rgba(255,255,255,0.35)", "stroke-width": 2, "stroke-dasharray": "2 6" }, board);
+    svg("path", { ...body, stroke: "#0f172a", "stroke-width": 11, opacity: 0.6 }, g);
+    svg("path", { ...body, stroke: color, "stroke-width": 8 }, g);
+    svg("path", { ...body, stroke: "rgba(255,255,255,0.35)", "stroke-width": 2, "stroke-dasharray": "2 6" }, g);
 
     const fx = -dx / len, fy = -dy / len; // the head faces away from the tail
-    svg("path", { d: `M${a.x + fx * 9} ${a.y + fy * 9} l${fx * 6} ${fy * 6}`, stroke: "#ef4444", "stroke-width": 1.5 }, board);
-    svg("circle", { cx: a.x, cy: a.y, r: 9, fill: color, stroke: "#0f172a", "stroke-width": 1.5 }, board);
+    svg("path", { d: `M${a.x + fx * 9} ${a.y + fy * 9} l${fx * 6} ${fy * 6}`, stroke: "#ef4444", "stroke-width": 1.5 }, g);
+    svg("circle", { cx: a.x, cy: a.y, r: 9, fill: color, stroke: "#0f172a", "stroke-width": 1.5 }, g);
     for (const side of [-1, 1]) {
-      svg("circle", { cx: a.x + fx * 3 + nx * side * 4, cy: a.y + fy * 3 + ny * side * 4, r: 2, fill: "#0f172a" }, board);
+      svg("circle", { cx: a.x + fx * 3 + nx * side * 4, cy: a.y + fy * 3 + ny * side * 4, r: 2, fill: "#0f172a" }, g);
     }
+    return g;
   }
 
-  drawBoard();
-  const tokenLayer = svg("g", {}, board); // drawn last so tokens sit above snakes and ladders
+  // Random layout. Every square is the end of at most one snake or ladder, so jumps never chain.
+  // Total climb and total drop stay within 25% of each other, with at most 3 snake heads in the top row.
+  function randomBoard() {
+    const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+    for (let attempt = 0; attempt < 500; attempt++) {
+      const used = new Set([1, 100]), jumps = {};
+      const add = (from, to) => {
+        if (used.has(from) || used.has(to)) return false;
+        used.add(from); used.add(to); jumps[from] = to;
+        return true;
+      };
+      const wantLadders = rand(8, 9), wantSnakes = rand(8, 10);
+      let ladders = 0, snakes = 0;
+      for (let tries = 0; tries < 400 && (ladders < wantLadders || snakes < wantSnakes); tries++) {
+        if (ladders < wantLadders) {
+          const from = rand(2, 80), to = from + rand(10, 40);
+          if (to <= 99 && add(from, to)) ladders++;
+        }
+        if (snakes < wantSnakes) {
+          const head = rand(20, 99), tail = head - rand(10, 45);
+          if (tail >= 2 && add(head, tail)) snakes++;
+        }
+      }
+      if (ladders < wantLadders || snakes < wantSnakes) continue;
+      let up = 0, down = 0, topRow = 0;
+      for (const [from, to] of Object.entries(jumps)) {
+        if (to > from) up += to - from;
+        else { down += from - to; if (+from > 90) topRow++; }
+      }
+      if (Math.abs(up - down) / Math.max(up, down) <= 0.25 && topRow <= 3) return jumps;
+    }
+    return { ...CLASSIC };
+  }
 
-  const pips = Array.from({ length: 9 }, () => {
-    const pip = document.createElement("div");
-    pip.className = "pip";
-    return diceEl.appendChild(pip);
-  });
+  // Briefly light up a square
+  function flash(rect, n, color) {
+    const { x, y } = center(n);
+    rect.setAttribute("x", x - CELL / 2);
+    rect.setAttribute("y", y - CELL / 2);
+    rect.setAttribute("fill", color);
+    rect.animate?.([{ opacity: 0.6 }, { opacity: 0 }], { duration: 1000, easing: "ease-out" });
+  }
+
+  // Make the snake or ladder starting on square n glow while the token travels along it
+  function glow(n, ms) {
+    const g = featureEls[n];
+    if (!g) return;
+    featureLayer.appendChild(g);
+    g.setAttribute("filter", "url(#glow)");
+    setTimeout(() => g.removeAttribute("filter"), ms + 300);
+  }
+
+  // ---------- Dice, log, tokens ----------
+
+  const pips = Array.from({ length: 9 }, () => diceEl.appendChild(el("div", "pip")));
 
   function showFace(v) {
     pips.forEach((pip, i) => pip.classList.toggle("on", FACES[v].includes(i)));
+    diceEl.setAttribute("aria-label", `Die showing ${v}`);
   }
 
-  async function rollDice() {
+  async function rollDice(sp) {
+    const frames = reducedMotion.matches ? 1 : sp.frames;
     diceEl.classList.add("rolling");
     let value = 1;
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < frames; i++) {
       value = 1 + Math.floor(Math.random() * 6);
       showFace(value);
-      await sleep(55);
+      sfx.dice();
+      await sleep(sp.frame);
     }
     diceEl.classList.remove("rolling");
     return value;
   }
 
   function say(text) {
-    const line = document.createElement("div");
-    line.textContent = text;
-    logEl.prepend(line);
+    logEl.prepend(el("div", "", text));
     while (logEl.children.length > 5) logEl.lastChild.remove();
   }
 
   function placeToken(i, slide = false) {
-    const p = players[i], g = tokens[i];
+    const p = game.players[i], g = tokens[i];
     const { x, y } = center(Math.max(p.pos, 1));
     const [ox, oy] = OFFSETS[i];
     g.classList.toggle("slide", slide);
@@ -284,120 +485,376 @@
     g.style.opacity = p.pos === 0 ? 0 : 1; // off the board until the first move
   }
 
+  // ---------- Confetti ----------
+
+  function confetti() {
+    if (reducedMotion.matches) return;
+    const run = ++confettiRun;
+    const w = confettiCanvas.clientWidth, h = confettiCanvas.clientHeight, dpr = window.devicePixelRatio || 1;
+    confettiCanvas.width = w * dpr;
+    confettiCanvas.height = h * dpr;
+    const ctx = confettiCanvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    const colors = [...PLAYER_COLORS, "#fbbf24", "#e2e8f0"];
+    const parts = Array.from({ length: 160 }, () => ({
+      x: Math.random() * w, y: -20 - Math.random() * h * 0.6,
+      vx: (Math.random() - 0.5) * 2.5, vy: 2 + Math.random() * 3,
+      r: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3,
+      s: 5 + Math.random() * 5, color: colors[Math.floor(Math.random() * colors.length)],
+    }));
+    const start = performance.now();
+    const frame = now => {
+      if (run !== confettiRun) return;
+      const age = now - start;
+      ctx.clearRect(0, 0, w, h);
+      ctx.globalAlpha = Math.max(0, 1 - Math.max(0, age - 2200) / 800);
+      for (const p of parts) {
+        p.vy += 0.05; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.r);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2);
+        ctx.restore();
+      }
+      if (age < 3000) requestAnimationFrame(frame);
+      else ctx.clearRect(0, 0, w, h);
+    };
+    requestAnimationFrame(frame);
+  }
+
+  function stopConfetti() {
+    confettiRun++;
+    confettiCanvas.getContext("2d").clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  }
+
+  // ---------- Setup, saved game, win record ----------
+
+  function loadSetup() {
+    const s = readJSON(SETUP_KEY);
+    const setup = {
+      count: [2, 3, 4].includes(s?.count) ? s.count : 2,
+      seats: DEFAULT_SEATS.map((d, i) => ({
+        name: typeof s?.seats?.[i]?.name === "string" ? s.seats[i].name.slice(0, 12) : d.name,
+        cpu: typeof s?.seats?.[i]?.cpu === "boolean" ? s.seats[i].cpu : d.cpu,
+      })),
+      bounce: !!s?.bounce,
+      threeSixes: !!s?.threeSixes,
+      randomBoard: !!s?.randomBoard,
+    };
+    // Earlier versions only saved a mode: "cpu", or the number of human players
+    const oldMode = localStorage.getItem("slMode");
+    if (!s && ["2", "3", "4"].includes(oldMode)) {
+      setup.count = Number(oldMode);
+      setup.seats = setup.seats.map(() => ({ name: "", cpu: false }));
+    }
+    localStorage.removeItem("slMode");
+    return setup;
+  }
+
+  const setup = loadSetup();
+  const saveSetup = () => writeJSON(SETUP_KEY, setup);
+
+  const seatRows = setup.seats.map((seat, i) => {
+    const row = el("div", "seat");
+    const dot = el("span", "dot");
+    dot.style.background = PLAYER_COLORS[i];
+    const name = el("input");
+    name.type = "text";
+    name.maxLength = 12;
+    name.value = seat.name;
+    name.setAttribute("aria-label", `Player ${i + 1} name`);
+    const type = el("select");
+    type.setAttribute("aria-label", `Player ${i + 1} type`);
+    type.append(new Option("Human", "human"), new Option("Computer", "cpu"));
+    type.value = seat.cpu ? "cpu" : "human";
+    const syncPlaceholder = () => { name.placeholder = defaultName(i, setup.seats[i].cpu); };
+    name.addEventListener("input", () => { setup.seats[i].name = name.value; saveSetup(); });
+    type.addEventListener("change", () => { setup.seats[i].cpu = type.value === "cpu"; syncPlaceholder(); saveSetup(); });
+    syncPlaceholder();
+    row.append(dot, name, type);
+    seatsEl.appendChild(row);
+    return row;
+  });
+
+  function showSeats() {
+    countEl.value = String(setup.count);
+    seatRows.forEach((row, i) => { row.hidden = i >= setup.count; });
+  }
+
+  countEl.addEventListener("change", () => { setup.count = Number(countEl.value); showSeats(); saveSetup(); });
+  for (const [id, key] of [["optBounce", "bounce"], ["optSixes", "threeSixes"], ["optRandom", "randomBoard"]]) {
+    const box = $(id);
+    box.checked = setup[key];
+    box.addEventListener("change", () => { setup[key] = box.checked; saveSetup(); });
+  }
+
+  const save = () => writeJSON(SAVE_KEY, game);
+
+  function loadGame() {
+    const g = readJSON(SAVE_KEY);
+    if (!g || g.v !== 1 || g.over) return null;
+    const playersOk = Array.isArray(g.players) && g.players.length >= 2 && g.players.length <= 4 &&
+      g.players.every(p => typeof p?.name === "string" && Number.isInteger(p.pos) && p.pos >= 0 && p.pos <= 100);
+    const jumpsOk = g.jumps && typeof g.jumps === "object" && Object.entries(g.jumps).every(([from, to]) =>
+      Number.isInteger(+from) && Number.isInteger(to) && +from >= 1 && +from <= 100 && to >= 1 && to <= 100 && +from !== to);
+    if (!playersOk || !jumpsOk || !Number.isInteger(g.turn) || g.turn < 0 || g.turn >= g.players.length) return null;
+    return {
+      v: 1,
+      rules: { bounce: !!g.rules?.bounce, threeSixes: !!g.rules?.threeSixes },
+      jumps: g.jumps,
+      players: g.players.map(p => ({
+        name: p.name.slice(0, 16), cpu: !!p.cpu, pos: p.pos,
+        rolls: +p.rolls || 0, ladders: +p.ladders || 0, snakes: +p.snakes || 0, biggestFall: +p.biggestFall || 0,
+      })),
+      turn: g.turn,
+      streak: +g.streak || 0,
+      over: false,
+    };
+  }
+
+  let record = readJSON(RECORD_KEY);
+  if (!record || typeof record.wins !== "object" || record.wins === null) record = { wins: {}, fastest: null };
+
+  function renderRecord() {
+    const wins = Object.entries(record.wins).sort((a, b) => b[1] - a[1]);
+    recordEl.replaceChildren();
+    if (!wins.length) {
+      recordEl.textContent = "No finished games yet.";
+      return;
+    }
+    recordEl.append(el("div", "", "Wins: " + wins.slice(0, 4).map(([name, n]) => `${name} ${n}`).join(" · ")));
+    if (record.fastest) recordEl.append(el("div", "", `Fastest win: ${record.fastest.name}, ${rollsText(record.fastest.rolls)}`));
+    const reset = el("button", "link-btn", "Reset record");
+    reset.addEventListener("click", () => {
+      if (!confirm("Reset the win record?")) return;
+      record = { wins: {}, fastest: null };
+      writeJSON(RECORD_KEY, record);
+      renderRecord();
+    });
+    recordEl.append(reset);
+  }
+
+  function renderRules() {
+    const r = game.rules;
+    rulesEl.textContent = "Roll to move. Ladders take you up, snakes slide you down. A 6 earns another roll" +
+      (r.threeSixes ? ", but a third 6 in a row ends your turn. " : ". ") +
+      (r.bounce ? "Overshoot 100 and you bounce back by the extra. " : "You must land exactly on 100 to win. ") +
+      "Space or Enter rolls.";
+  }
+
+  // ---------- Game flow ----------
+
   function newGame() {
+    const seats = setup.seats.slice(0, setup.count);
+    const seen = {};
+    const names = seats.map((s, i) => {
+      const base = s.name.trim() || defaultName(i, s.cpu);
+      seen[base] = (seen[base] || 0) + 1;
+      return seen[base] > 1 ? `${base} ${seen[base]}` : base;
+    });
+    game = {
+      v: 1,
+      rules: { bounce: setup.bounce, threeSixes: setup.threeSixes },
+      jumps: setup.randomBoard ? randomBoard() : { ...CLASSIC },
+      players: seats.map((s, i) => ({ name: names[i], cpu: s.cpu, pos: 0, rolls: 0, ladders: 0, snakes: 0, biggestFall: 0 })),
+      turn: 0,
+      streak: 0, // 6s rolled in a row by the current player
+      over: false,
+    };
+    begin();
+    say(`${game.players[0].name} to roll first.`);
+    save();
+    renderTurn();
+  }
+
+  // Shared by new and restored games: reset the board, tokens and panel for the current `game`
+  function begin() {
     gameId++;
     clearTimeout(cpuTimer);
-    localStorage.setItem("slMode", modeEl.value);
-    const vsCpu = modeEl.value === "cpu";
-    const count = vsCpu ? 2 : Number(modeEl.value);
-    players = Array.from({ length: count }, (_, i) => ({
-      name: vsCpu ? (i === 0 ? "You" : "Computer") : `Player ${i + 1}`,
-      color: PLAYER_COLORS[i],
-      cpu: vsCpu && i === 1,
-      pos: 0,
-      rolls: 0,
-    }));
+    stopConfetti();
+    busy = false;
+    drawFeatures(game.jumps);
     tokenLayer.replaceChildren();
-    tokens = players.map((p, i) => {
+    tokens = game.players.map((p, i) => {
       const g = svg("g", { class: "token" });
-      svg("circle", { r: 10, fill: p.color }, g);
+      svg("circle", { r: 10, fill: PLAYER_COLORS[i] }, g);
       svg("text", {}, g).textContent = i + 1;
       return g;
     });
     // Position before inserting so tokens don't animate in from the corner
-    players.forEach((_, i) => { placeToken(i); tokenLayer.appendChild(tokens[i]); });
-    turn = 0;
-    busy = false;
-    over = false;
+    game.players.forEach((_, i) => { placeToken(i); tokenLayer.appendChild(tokens[i]); });
     logEl.replaceChildren();
     overlay.classList.add("hidden");
     showFace(1);
-    say(`${players[0].name} to roll first.`);
-    renderTurn();
+    renderRules();
   }
 
   function renderTurn() {
-    const p = players[turn];
-    document.documentElement.style.setProperty("--turn", p.color);
+    const { players, turn, over } = game, p = players[turn];
+    document.documentElement.style.setProperty("--turn", PLAYER_COLORS[turn]);
     listEl.replaceChildren(...players.map((q, i) => {
-      const li = document.createElement("li");
-      if (i === turn && !over) li.className = "active";
-      li.innerHTML = `<span class="dot" style="background:${q.color}"></span>` +
-                     `<span class="pname">${q.name}</span>` +
-                     `<span class="ppos">${q.pos ? "Square " + q.pos : "Start"}</span>`;
+      const li = el("li");
+      if (i === turn && !over) {
+        li.className = "active";
+        li.setAttribute("aria-current", "true");
+      }
+      const dot = el("span", "dot");
+      dot.style.background = PLAYER_COLORS[i];
+      const name = el("span", "pname", q.name);
+      if (q.cpu) name.append(" ", el("span", "tag", "CPU"));
+      li.append(dot, name, el("span", "ppos", q.pos ? `Square ${q.pos}` : "Start"));
       return li;
     }));
     tokens.forEach((g, i) => g.classList.toggle("active", i === turn && !over));
     tokenLayer.appendChild(tokens[turn]); // current player's token on top
-    rollBtn.textContent = p.cpu ? "Computer…" : `Roll — ${p.name}`;
+    rollBtn.textContent = over ? "Game over" : p.cpu ? `${p.name}…` : `Roll — ${p.name}`;
     rollBtn.disabled = busy || over || p.cpu;
-    if (!over && !busy && p.cpu) cpuTimer = setTimeout(roll, 900);
+    clearTimeout(cpuTimer);
+    if (!over && !busy && p.cpu) cpuTimer = setTimeout(roll, speed().cpu);
   }
 
   async function roll() {
-    if (busy || over) return;
-    const id = gameId, p = players[turn];
+    if (busy || game.over) return;
+    const id = gameId, alive = () => id === gameId;
+    const p = game.players[game.turn], color = PLAYER_COLORS[game.turn], sp = speed();
     busy = true;
     rollBtn.disabled = true;
 
-    const value = await rollDice();
-    if (id !== gameId) return;
+    const value = await rollDice(sp);
+    if (!alive()) return;
     p.rolls++;
+    game.streak = value === 6 ? game.streak + 1 : 0;
+    let again = value === 6;
 
-    if (p.pos + value > 100) {
+    if (game.rules.threeSixes && game.streak === 3) {
+      again = false;
+      say(`${p.name} rolled a third 6 in a row, turn passes.`);
+      sfx.blocked();
+    } else if (p.pos + value > 100 && !game.rules.bounce) {
       say(`${p.name} rolled ${value} but needs exactly ${100 - p.pos}.`);
+      sfx.blocked();
     } else {
+      // With the bounce rule, steps past 100 come back down
+      const back = Math.max(0, p.pos + value - 100);
       for (let s = 0; s < value; s++) {
-        p.pos++;
-        placeToken(turn);
-        await sleep(170);
-        if (id !== gameId) return;
+        p.pos += s < value - back ? 1 : -1;
+        placeToken(game.turn);
+        sfx.step();
+        await sleep(sp.step);
+        if (!alive()) return;
       }
-      const end = SNAKES[p.pos] ?? LADDERS[p.pos];
+      const how = back ? `rolled ${value}, bounced back` : `rolled ${value}`;
+      const end = game.jumps[p.pos];
       if (end) {
-        say(`${p.name} rolled ${value}, ${end > p.pos ? "climbs a ladder" : "hits a snake"}: ${p.pos} → ${end}`);
-        await sleep(200);
-        if (id !== gameId) return;
+        const up = end > p.pos;
+        say(`${p.name} ${how}, ${up ? "climbs a ladder" : "hits a snake"}: ${p.pos} → ${end}`);
+        if (up) p.ladders++;
+        else { p.snakes++; p.biggestFall = Math.max(p.biggestFall, p.pos - end); }
+        flash(hiJump, p.pos, up ? "#fbbf24" : "#ef4444");
+        glow(p.pos, sp.pause + sp.slide);
+        if (up) sfx.ladder(); else sfx.snake();
+        await sleep(sp.pause);
+        if (!alive()) return;
         p.pos = end;
-        placeToken(turn, true);
-        await sleep(650);
-        if (id !== gameId) return;
+        placeToken(game.turn, true);
+        await sleep(sp.slide);
+        if (!alive()) return;
       } else {
-        say(`${p.name} rolled ${value} → square ${p.pos}.`);
+        say(`${p.name} ${how} → square ${p.pos}.`);
       }
+      flash(hiLand, p.pos, color);
     }
 
     busy = false;
     if (p.pos === 100) return win(p);
-    if (value === 6) say(`${p.name} rolled a 6, roll again!`);
-    else turn = (turn + 1) % players.length;
+    if (again) say(`${p.name} rolled a 6, roll again!`);
+    else {
+      game.turn = (game.turn + 1) % game.players.length;
+      game.streak = 0;
+    }
+    save();
     renderTurn();
+  }
+
+  function renderStats() {
+    const head = el("tr");
+    for (const h of ["Player", "Rolls", "Ladders", "Snakes", "Biggest fall"]) head.append(el("th", "", h));
+    const rows = game.players.map((q, i) => {
+      const tr = el("tr"), name = el("td"), dot = el("span", "dot");
+      dot.style.background = PLAYER_COLORS[i];
+      name.append(dot, q.name);
+      tr.append(name, el("td", "", q.rolls), el("td", "", q.ladders), el("td", "", q.snakes), el("td", "", q.biggestFall));
+      return tr;
+    });
+    statsTable.replaceChildren(head, ...rows);
   }
 
   function win(p) {
-    over = true;
+    game.over = true;
+    localStorage.removeItem(SAVE_KEY);
+    record.wins[p.name] = (record.wins[p.name] || 0) + 1;
+    if (!record.fastest || p.rolls < record.fastest.rolls) record.fastest = { name: p.name, rolls: p.rolls };
+    writeJSON(RECORD_KEY, record);
+    renderRecord();
     renderTurn();
     winTitle.textContent = p.name === "You" ? "You win!" : `${p.name} wins!`;
-    winText.textContent = `Reached 100 in ${p.rolls} rolls.`;
+    winText.textContent = `Reached 100 in ${rollsText(p.rolls)}.`;
+    renderStats();
     say(`${p.name} reached 100!`);
     overlay.classList.remove("hidden");
+    $("againBtn").focus();
+    sfx.win();
+    confetti();
+  }
+
+  // ---------- Controls ----------
+
+  function applySpeed() {
+    const sp = speed();
+    document.documentElement.style.setProperty("--step", `${sp.step - 10}ms`);
+    document.documentElement.style.setProperty("--slide", `${sp.slide - 50}ms`);
+    localStorage.setItem("slSpeed", speedEl.value);
   }
 
   rollBtn.addEventListener("click", e => { e.currentTarget.blur(); roll(); });
-  document.getElementById("newBtn").addEventListener("click", e => { e.currentTarget.blur(); newGame(); });
-  document.getElementById("againBtn").addEventListener("click", e => { e.currentTarget.blur(); newGame(); });
-  modeEl.addEventListener("change", () => { modeEl.blur(); newGame(); });
-
-  document.addEventListener("keydown", e => {
-    if (e.key !== " " && e.key !== "Enter") return;
-    e.preventDefault();
-    if (over) newGame();
-    else if (!players[turn].cpu) roll();
+  $("newBtn").addEventListener("click", e => { e.currentTarget.blur(); newGame(); });
+  $("againBtn").addEventListener("click", e => { e.currentTarget.blur(); newGame(); });
+  $("applyBtn").addEventListener("click", () => { $("setup").open = false; newGame(); });
+  speedEl.addEventListener("change", () => { speedEl.blur(); applySpeed(); });
+  muteBtn.addEventListener("click", () => {
+    muted = !muted;
+    localStorage.setItem("slMuted", muted ? "1" : "0");
+    renderMute();
+    audio();
   });
 
-  const saved = localStorage.getItem("slMode");
-  if ([...modeEl.options].some(o => o.value === saved)) modeEl.value = saved;
-  newGame();
+  document.addEventListener("keydown", e => {
+    if ((e.key !== " " && e.key !== "Enter") || e.repeat) return;
+    // Leave the key alone when a control has focus, so buttons, dropdowns and name fields work normally
+    if (e.target.closest?.("button, select, input, textarea, summary, a")) return;
+    e.preventDefault();
+    if (game.over) newGame();
+    else if (!game.players[game.turn].cpu) roll();
+  });
+
+  // ---------- Start ----------
+
+  if (SPEEDS[localStorage.getItem("slSpeed")]) speedEl.value = localStorage.getItem("slSpeed");
+  applySpeed();
+  renderMute();
+  showSeats();
+  renderRecord();
+
+  const saved = loadGame();
+  if (saved) {
+    game = saved;
+    begin();
+    say("Welcome back! Your game was restored.");
+    renderTurn();
+  } else {
+    newGame();
+  }
 })();
 </script>
 </body>
